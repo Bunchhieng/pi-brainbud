@@ -1,0 +1,25 @@
+src/index.ts
+  c9cee0977ac43aed 18-19
+src/context/runtimeTracker.ts
+  c9cee0977ac43aed 46-49,57,69
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.1",
+  "base_commit_sha": "531986db148177ae14a568ce97586da5e3f26a24",
+  "prompts": {
+    "c9cee0977ac43aed": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3b573cb5-533e-4a02-a451-06f855cd7efe",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "Bunchhieng Soth",
+      "messages": [],
+      "total_additions": 8,
+      "total_deletions": 5,
+      "accepted_lines": 8,
+      "overriden_lines": 0
+    }
+  }
+}
