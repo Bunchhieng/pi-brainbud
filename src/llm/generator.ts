@@ -3,6 +3,7 @@ import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
 
 import { buildConversationSnapshot, buildLlmTipPrompt, SYSTEM_PROMPT } from "./prompt";
 import { parseLlmTipResponse } from "./parser";
+import { validateTipCode } from "./validator";
 import type { BrainBudTipSuggestion, TipContext } from "../types";
 
 export async function generateTipWithLlm(
@@ -54,5 +55,7 @@ export async function generateTipWithLlm(
     if (event.type === "error") return undefined;
   }
 
-  return text.trim() ? parseLlmTipResponse(text.trim()) : undefined;
+  const tip = text.trim() ? parseLlmTipResponse(text.trim()) : undefined;
+  if (!tip) return undefined;
+  return validateTipCode(ctx, tip);
 }
