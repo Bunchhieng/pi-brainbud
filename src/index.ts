@@ -15,8 +15,6 @@ import { debounce } from "./utils/debounce";
 import { logger } from "./utils/logger";
 
 const PROJECT_SIGNAL_FILES = ["package.json", "requirements.txt", "pyproject.toml", "Cargo.toml", "go.mod"] as const;
-const STREAM_WIDGET = "brainbud-stream";
-const STREAM_LINES  = 6;
 
 async function readSnippet(filePath: string, maxChars: number): Promise<string | undefined> {
   try {
@@ -92,11 +90,7 @@ export default function brainBud(pi: ExtensionAPI) {
     const context = tracker.buildContext(ctx.cwd, projectCategories, reason);
 
     ctx.ui.setStatus("brainbud", "🧠 thinking...");
-    const tip = await generateTipWithLlm(ctx, context, recentTipTitles, (accumulated) => {
-      const lines = accumulated.split("\n").filter((l) => l.trim());
-      ctx.ui.setWidget(STREAM_WIDGET, lines.slice(-STREAM_LINES), { placement: "belowEditor" });
-    });
-    ctx.ui.setWidget(STREAM_WIDGET, undefined);
+    const tip = await generateTipWithLlm(ctx, context, recentTipTitles);
     ctx.ui.setStatus("brainbud", statusIdle());
 
     if (!tip) return;
