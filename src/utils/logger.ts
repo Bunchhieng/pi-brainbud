@@ -1,6 +1,7 @@
 export class Logger {
-  error(message: string, error?: unknown): void {
-    console.error(`[BrainBud] ${message}`, error);
+  error(_message: string, _error?: unknown): void {
+    // Intentionally silent — errors are non-fatal and logging to stderr
+    // causes noise in Pi's UI chat bar.
   }
 }
 
