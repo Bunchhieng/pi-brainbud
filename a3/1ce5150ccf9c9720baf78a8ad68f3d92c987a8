@@ -1,0 +1,25 @@
+src/index.ts
+  c9cee0977ac43aed 93
+src/llm/generator.ts
+  c9cee0977ac43aed 12,50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.1",
+  "base_commit_sha": "a31ce5150ccf9c9720baf78a8ad68f3d92c987a8",
+  "prompts": {
+    "c9cee0977ac43aed": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3b573cb5-533e-4a02-a451-06f855cd7efe",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "Bunchhieng Soth",
+      "messages": [],
+      "total_additions": 3,
+      "total_deletions": 13,
+      "accepted_lines": 3,
+      "overriden_lines": 0
+    }
+  }
+}
