@@ -43,15 +43,18 @@ export class RuntimeTracker {
     this.recentCommands = pushBounded(this.recentCommands, command, 10);
   }
 
+  private fileExtension(): string | undefined {
+    return this.activeFile ? path.extname(this.activeFile) : undefined;
+  }
+
   buildContext(cwd: string, projectCategories: BrainBudCategory[], triggerReason: TriggerReason): TipContext {
-    const activeFileExtension = this.activeFile ? path.extname(this.activeFile) : undefined;
     const mergedCategories = new Set<BrainBudCategory>([...projectCategories, ...this.inferredCategories]);
 
     return {
       cwd,
       projectCategories: [...mergedCategories],
       activeFile: this.activeFile,
-      activeFileExtension,
+      activeFileExtension: this.fileExtension(),
       activeImports: [...this.activeImports],
       activeSnippet: this.activeSnippet,
       recentEditedFiles: [...this.recentEditedFiles],
@@ -63,7 +66,7 @@ export class RuntimeTracker {
   snapshot(): RuntimeSnapshot {
     return {
       activeFile: this.activeFile,
-      activeFileExtension: this.activeFile ? path.extname(this.activeFile) : undefined,
+      activeFileExtension: this.fileExtension(),
       activeImports: [...this.activeImports],
       activeSnippet: this.activeSnippet,
       recentEditedFiles: [...this.recentEditedFiles],
