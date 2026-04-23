@@ -83,8 +83,9 @@ export default function brainBud(pi: ExtensionAPI) {
 
   const statusIdle = () => `🧠 "A dose of brainbud a day, keeps the brain rot away." - BrainBud`;
 
-  const maybeShowTip = async (ctx: ExtensionContext, reason: TriggerReason) => {
-    if (!ctx.hasUI || !config || !canShowTip()) return;
+  const maybeShowTip = async (ctx: ExtensionContext, reason: TriggerReason, bypassGate = false) => {
+    if (!ctx.hasUI || !config) return;
+    if (!bypassGate && !canShowTip()) return;
 
     const context = tracker.buildContext(ctx.cwd, projectCategories, reason);
 
@@ -220,7 +221,7 @@ export default function brainBud(pi: ExtensionAPI) {
       clearIdleTimer();
       const reason = pendingReason ?? "idle";
       pendingReason = undefined;
-      await maybeShowTip(ctx, reason);
+      await maybeShowTip(ctx, reason, true);
       idleTimer = setTimeout(() => {
         void safely(ctx, async () => {
           await maybeShowTip(ctx, "idle");
