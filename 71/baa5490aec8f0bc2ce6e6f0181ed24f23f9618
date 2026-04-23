@@ -1,0 +1,23 @@
+src/utils/logger.ts
+  c9cee0977ac43aed 2-4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.1",
+  "base_commit_sha": "71baa5490aec8f0bc2ce6e6f0181ed24f23f9618",
+  "prompts": {
+    "c9cee0977ac43aed": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3b573cb5-533e-4a02-a451-06f855cd7efe",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "Bunchhieng Soth",
+      "messages": [],
+      "total_additions": 3,
+      "total_deletions": 2,
+      "accepted_lines": 3,
+      "overriden_lines": 0
+    }
+  }
+}
