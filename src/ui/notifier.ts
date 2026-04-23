@@ -1,4 +1,4 @@
-import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 
 import type { BrainBudTipSuggestion } from "../types";
 
@@ -6,23 +6,25 @@ const RESET = "\x1b[0m";
 const BOLD  = "\x1b[1m";
 const DIM   = "\x1b[2m";
 const CYAN  = "\x1b[36m";
+const AMBER = "\x1b[93m";
 const WHITE = "\x1b[97m";
 
-const INNER      = 62;
-const WIDGET_KEY = "brainbud";
-const DISPLAY_MS = 20_000;
-const MAX_LINES  = 10;
+const MSG_TYPE   = "brainbud-tip";
+const INNER      = 60;           // box content width
+const WRAP_WIDTH = INNER - 2;    // body/code wrap — guarantees ≥2 spaces of right margin
 
-const CODE_INDENT      = "  ";
-const CODE_WRAP_INDENT = "    ";
-
-function stripAnsi(s: string): string {
-  return s.replace(/\x1b\[[0-9;]*m/g, "");
+function visibleLen(text: string): number {
+  const stripped = text.replace(/\x1b\[[0-9;]*m/g, "");
+  let len = 0;
+  for (const char of stripped) {
+    const cp = char.codePointAt(0) ?? 0;
+    len += cp > 0xFFFF ? 2 : 1;   // emoji & supplementary = 2 terminal columns
+  }
+  return len;
 }
 
 function padTo(text: string, width: number): string {
-  const visible = stripAnsi(text).length;
-  return text + " ".repeat(Math.max(0, width - visible));
+  return text + " ".repeat(Math.max(0, width - visibleLen(text)));
 }
 
 function wrapWords(text: string, width: number): string[] {
@@ -37,83 +39,60 @@ function wrapWords(text: string, width: number): string[] {
     }
   }
   if (current) lines.push(current);
-  return lines;
+  return lines.length ? lines : [""];
 }
 
-function topBorder(title: string): string {
-  const label = ` ${title} `;
-  const labelVisible = stripAnsi(label).length;
-  const fill = Math.max(0, INNER + 2 - labelVisible);
-  return `${DIM}╭${RESET}${BOLD}${WHITE}${label}${RESET}${DIM}${"─".repeat(fill)}╮${RESET}`;
-}
+const topBorder    = () => `${AMBER}╭${"─".repeat(INNER + 2)}╮${RESET}`;
+const bottomBorder = () => `${AMBER}╰${"─".repeat(INNER + 2)}╯${RESET}`;
+const divider      = () => `${AMBER}├${"─".repeat(INNER + 2)}┤${RESET}`;
+const row          = (content: string) =>
+  `${AMBER}│${RESET} ${padTo(content, INNER)} ${AMBER}│${RESET}`;
 
-function divider(): string {
-  return `${DIM}├${"─".repeat(INNER + 2)}┤${RESET}`;
-}
-
-function bottomBorder(): string {
-  return `${DIM}╰${"─".repeat(INNER + 2)}╯${RESET}`;
-}
-
-function row(content: string): string {
-  return `${DIM}│${RESET} ${padTo(content, INNER)} ${DIM}│${RESET}`;
-}
-
-function renderCode(code: string): string[] {
+function formatTip(tip: BrainBudTipSuggestion): string {
   const lines: string[] = [];
-  for (const codeLine of code.split("\n")) {
-    const trimmed = codeLine.trimEnd();
-    const maxWidth = INNER - CODE_INDENT.length;
-    if (trimmed.length <= maxWidth) {
-      lines.push(row(`${CYAN}${CODE_INDENT}${trimmed}${RESET}`));
-    } else {
-      let remaining = trimmed;
-      let first = true;
-      while (remaining.length > 0) {
-        const indent = first ? CODE_INDENT : CODE_WRAP_INDENT;
-        const width = INNER - indent.length;
-        lines.push(row(`${CYAN}${indent}${remaining.slice(0, width)}${RESET}`));
-        remaining = remaining.slice(width);
-        first = false;
-      }
-    }
-  }
-  return lines;
-}
 
-function buildWidget(tip: BrainBudTipSuggestion): string[] {
-  const lines: string[] = [];
-  // budget: MAX_LINES total; top + bottom borders = 2; each section may also need a divider
-  const budget = () => MAX_LINES - lines.length - 1; // -1 reserved for bottom border
+  lines.push(topBorder());
+  lines.push(row(`🧠  ${BOLD}${WHITE}${tip.title}${RESET}`));
+  lines.push(divider());
 
-  lines.push(topBorder(`🧠 ${tip.title}`));
-
-  for (const line of wrapWords(tip.body, INNER)) {
-    if (budget() <= 0) break;
+  for (const line of wrapWords(tip.body, WRAP_WIDTH)) {
     lines.push(row(line));
   }
 
-  if (tip.code && budget() >= 2) {
-    const codeLines = renderCode(tip.code).slice(0, budget() - 1); // -1 for divider
+  if (tip.code) {
     lines.push(divider());
-    lines.push(...codeLines);
-  }
-
-  if (tip.learnMoreUrl && budget() >= 2) {
-    lines.push(divider());
-    lines.push(row(`${DIM}↗ ${tip.learnMoreUrl}${RESET}`));
+    for (const codeLine of tip.code.split("\n")) {
+      const trimmed = codeLine.trimEnd();
+      // Wrap long code lines at WRAP_WIDTH - 2 (accounts for the 2-space indent)
+      let remaining = trimmed;
+      let first = true;
+      do {
+        const indent = first ? "  " : "    ";
+        const chunk = remaining.slice(0, WRAP_WIDTH - indent.length);
+        lines.push(row(`${CYAN}${indent}${chunk}${RESET}`));
+        remaining = remaining.slice(chunk.length);
+        first = false;
+      } while (remaining.length > 0);
+    }
   }
 
   lines.push(bottomBorder());
 
-  return lines;
+  // URL sits outside the box — no alignment constraint, any length is fine
+  if (tip.learnMoreUrl) {
+    lines.push(`${DIM}↗  ${tip.learnMoreUrl}${RESET}`);
+  }
+
+  return lines.join("\n");
 }
 
 class TipNotifier {
-  showTip(ctx: ExtensionContext, tip: BrainBudTipSuggestion): void {
-    if (!ctx.hasUI) return;
-    ctx.ui.setWidget(WIDGET_KEY, buildWidget(tip), { placement: "belowEditor" });
-    setTimeout(() => ctx.ui.setWidget(WIDGET_KEY, undefined), DISPLAY_MS);
+  showTip(pi: ExtensionAPI, tip: BrainBudTipSuggestion): void {
+    pi.sendMessage({
+      customType: MSG_TYPE,
+      content: formatTip(tip),
+      display: true
+    });
   }
 }
 

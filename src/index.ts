@@ -84,18 +84,24 @@ export default function brainBud(pi: ExtensionAPI) {
   const statusIdle = () => `🧠 "A dose of brainbud a day, keeps the brain rot away." - BrainBud`;
 
   const maybeShowTip = async (ctx: ExtensionContext, reason: TriggerReason, bypassGate = false) => {
-    if (!ctx.hasUI || !config) return;
+    if (!config) return;
     if (!bypassGate && !canShowTip()) return;
 
     const context = tracker.buildContext(ctx.cwd, projectCategories, reason);
 
+    const STREAM_WIDGET = "brainbud-stream";
+    const STREAM_LINES  = 6;
     ctx.ui.setStatus("brainbud", "🧠 thinking...");
-    const tip = await generateTipWithLlm(ctx, context, recentTipTitles);
+    const tip = await generateTipWithLlm(ctx, context, recentTipTitles, (accumulated) => {
+      const lines = accumulated.split("\n").filter((l) => l.trim());
+      ctx.ui.setWidget(STREAM_WIDGET, lines.slice(-STREAM_LINES), { placement: "belowEditor" });
+    });
+    ctx.ui.setWidget(STREAM_WIDGET, undefined);
     ctx.ui.setStatus("brainbud", statusIdle());
 
     if (!tip) return;
 
-    notifier.showTip(ctx, tip);
+    notifier.showTip(pi, tip);
     rememberTip(tip.title);
   };
 
@@ -134,7 +140,7 @@ export default function brainBud(pi: ExtensionAPI) {
         const tip = await generateTipWithLlm(ctx, context, recentTipTitles);
         ctx.ui.setStatus("brainbud", statusIdle());
         if (!tip) { ctx.ui.notify("BrainBud: model returned no tip", "info"); return; }
-        notifier.showTip(ctx, tip);
+        notifier.showTip(pi, tip);
         rememberTip(tip.title);
       } catch (error) {
         ctx.ui.setStatus("brainbud", statusIdle());

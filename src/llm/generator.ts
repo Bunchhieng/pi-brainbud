@@ -8,7 +8,8 @@ import type { BrainBudTipSuggestion, TipContext } from "../types";
 export async function generateTipWithLlm(
   ctx: ExtensionContext,
   context: TipContext,
-  recentTipTitles: string[]
+  recentTipTitles: string[],
+  onDelta?: (accumulated: string) => void
 ): Promise<BrainBudTipSuggestion | undefined> {
   if (!ctx.model) return undefined;
 
@@ -46,7 +47,10 @@ export async function generateTipWithLlm(
 
   let text = "";
   for await (const event of eventStream) {
-    if (event.type === "text_delta") text += event.delta;
+    if (event.type === "text_delta") {
+      text += event.delta;
+      onDelta?.(text);
+    }
     if (event.type === "error") return undefined;
   }
 
