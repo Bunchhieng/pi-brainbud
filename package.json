@@ -1,0 +1,26 @@
+{
+  "name": "pi-brainbud",
+  "version": "0.1.0",
+  "type": "module",
+  "keywords": ["pi-package", "pi-extension", "developer-tools"],
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "tsc --noEmit"
+  },
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-coding-agent": "*",
+    "@mariozechner/pi-ai": "*"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.3",
+    "@types/node": "^22.10.1"
+  }
+}
