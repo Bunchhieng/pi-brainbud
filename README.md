@@ -1,80 +1,56 @@
 # pi-brainbud
 
-A [Pi](https://github.com/mariozechner/pi-coding-agent) extension that delivers contextual programming tips while you vibe-code — without interrupting your session.
+A [Pi](https://github.com/mariozechner/pi-coding-agent) extension that teaches CS concepts while you code — without interrupting your session.
 
 ## Motivation
 
-Vibe coding can cause brain rot. BrainBud keeps you sharp by surfacing relevant tips, tricks, and idioms as you work.
+Vibe coding can cause brain rot. BrainBud keeps you sharp by surfacing programming concepts, math tricks, and language internals as you work.
 
 > "A dose of brainbud a day, keeps the brain rot away." — BrainBud
 
 ## How it works
 
 1. **Context collection** — BrainBud listens to Pi tool calls (`read`, `edit`, `write`, `bash`) and records the active file, recent edits, recent commands, and imports.
-2. **Project detection** — On session start (and on manifest changes), it scans the project root for `package.json`, `requirements.txt`, `pyproject.toml`, `Cargo.toml`, and `go.mod` to infer languages and frameworks.
-3. **LLM call** — When a tip opportunity arises, BrainBud streams from the Pi-configured LLM with `reasoningEffort: "minimal"`. While streaming, a live preview widget appears below the editor. A `🧠 thinking...` status indicator is shown in the footer.
-4. **Tip injection** — If the model returns a relevant tip, it is injected into the conversation via `pi.sendMessage()` as an amber-bordered box. It persists in session history so you can scroll back to it. The session is never paused.
+2. **Project detection** — On session start it scans the project root for `package.json`, `requirements.txt`, `pyproject.toml`, `Cargo.toml`, and `go.mod` to infer languages and frameworks.
+3. **LLM call** — When a tip opportunity arises, BrainBud picks a CS concept adjacent to what you're working on and streams an explanation from the Pi-configured LLM. A `🧠 thinking...` indicator appears in the footer while it generates.
+4. **Tip injection** — The tip is injected into the conversation via `pi.sendMessage()` and persists in session history. Your session is never paused.
 
-### Streaming preview
+### What BrainBud teaches
 
-While the LLM generates, a live widget appears below the editor showing the raw stream so you know something is happening:
+BrainBud is a CS teacher, not a code reviewer. It will never suggest fixes to your code. Instead it explains the *why* and the *how*:
 
-```
-{"shouldTip":true,"title":"Use satisfies for prec
-ise object types","body":"TypeScript's satisfies
-```
-
-Once the stream ends the widget clears and the formatted tip is injected into the conversation.
+- **Bit tricks & math** — why `x & (x-1)` clears the lowest set bit, why XOR swap works, power-of-two checks
+- **Language internals** — how Python dicts use open addressing, how Rust's borrow checker tracks lifetimes, how the JS event loop works
+- **Algorithm insights** — why mergesort is stable but quicksort isn't, what amortised O(1) means for dynamic arrays
+- **Subtle behaviour** — integer overflow in two's complement, float precision loss, hash collision strategies
+- **Clever idioms** — one-liners that exploit a language property in a non-obvious way
 
 ### Tip in conversation
 
-Tips are rendered as an amber-bordered box directly in the Pi conversation so they persist in session history:
+Tips appear as an amber left-gutter block directly in the Pi conversation:
 
 ```
-╭──────────────────────────────────────────────────────────────╮
-│ 🧠  Use satisfies for precise object types                   │
-├──────────────────────────────────────────────────────────────┤
-│ TypeScript's satisfies operator validates an expression      │
-│ against a type without widening its literal types.           │
-├──────────────────────────────────────────────────────────────┤
-│   const cfg = { port: 3000 } satisfies Config;               │
-╰──────────────────────────────────────────────────────────────╯
-↗  https://www.typescriptlang.org/docs/handbook/release-notes/typescript-4-9.html
+│ 🧠  XOR swap works without a temporary variable
+│
+│ x ^= y swaps x and y because XOR is its own inverse: applying
+│ it twice returns the original value, so the third XOR cancels
+│ the second.
+│
+│   a ^= b
+│   b ^= a
+│   a ^= b
+│
+↗  https://en.wikipedia.org/wiki/XOR_swap_algorithm
 ```
 
-A tip with no code snippet:
+A tip without a code snippet:
 
 ```
-╭──────────────────────────────────────────────────────────────╮
-│ 🧠  Prefer timezone-aware datetimes in Django                │
-├──────────────────────────────────────────────────────────────┤
-│ When USE_TZ = True, use django.utils.timezone.now()          │
-│ instead of datetime.now() to avoid naive/aware bugs in       │
-│ queries and model comparisons.                               │
-╰──────────────────────────────────────────────────────────────╯
-↗  https://docs.djangoproject.com/en/stable/topics/i18n/timezones/
-```
-
-## Architecture
-
-```
-pi-brainbud/
-├── src/
-│   ├── index.ts                  # Extension entry — registers events, commands, timers
-│   ├── types.ts                  # Shared types (BrainBudConfig, TipContext, …)
-│   ├── config/
-│   │   └── settings.ts           # Reads brainbud block from ~/.pi and .pi/settings.json
-│   ├── context/
-│   │   ├── projectDetector.ts    # Manifest scanning → BrainBudCategory[]
-│   │   └── runtimeTracker.ts     # Per-session file/command signal accumulator
-│   ├── llm/
-│   │   ├── generator.ts          # Streams from pi-ai; fires onDelta for live preview
-│   │   ├── prompt.ts             # SYSTEM_PROMPT constant + buildLlmTipPrompt() for dynamic context
-│   │   └── parser.ts             # Extracts and validates JSON from the model response
-│   └── ui/
-│       └── notifier.ts           # Formats and injects tip via pi.sendMessage()
-└── test/
-    └── projectDetector.test.ts   # Unit tests for manifest detection and import extraction
+│ 🧠  IEEE 754 floats can't represent 0.1 exactly
+│
+│ 0.1 has no finite binary representation; it's stored as the
+│ nearest 53-bit fraction, so 0.1 + 0.2 evaluates to
+│ 0.30000000000000004 — not a bug, just the spec.
 ```
 
 ### Data flow
@@ -93,13 +69,12 @@ session_start / tool_call / user_bash / agent_end
         │
         ▼
   generateTipWithLlm() ──► stream() from pi-ai (reasoningEffort: minimal)
-        │    └─ onDelta ──► live preview widget (last 6 lines, clears on done)
         │                        └─► JSON: { shouldTip, title, body, category, code, learnMoreUrl }
         ▼
-  parseLlmTipResponse()
-        │ valid tip
+  validateTipCode()  ← second LLM pass strips code if it doesn't match the explanation
+        │
         ▼
-  pi.sendMessage()  ← amber-bordered box injected into conversation, persists in history
+  pi.sendMessage()  ← amber left-gutter tip injected into conversation
 ```
 
 ### Trigger reasons
