@@ -7,6 +7,7 @@ import { isToolCallEventType } from "@mariozechner/pi-coding-agent";
 
 import { loadBrainBudConfig } from "./config/settings";
 import { detectProjectSignals } from "./context/projectDetector";
+import { appendTip, getHistory, getLastTip } from "./history/tipHistory";
 import { RuntimeTracker } from "./context/runtimeTracker";
 import { generateTipWithLlm } from "./llm/generator";
 import type { BrainBudCategory, BrainBudConfig, TriggerReason } from "./types";
@@ -97,6 +98,7 @@ export default function brainBud(pi: ExtensionAPI) {
 
     notifier.showTip(pi, tip);
     rememberTip(tip.title);
+    void appendTip(tip).catch((error) => logger.error("Failed to save tip history", error));
   };
 
   const safely = async (ctx: ExtensionContext, work: () => Promise<void>) => {
@@ -136,10 +138,33 @@ export default function brainBud(pi: ExtensionAPI) {
         if (!tip) { ctx.ui.notify("BrainBud: model returned no tip", "info"); return; }
         notifier.showTip(pi, tip);
         rememberTip(tip.title);
+        void appendTip(tip).catch((error) => logger.error("Failed to save tip history", error));
       } catch (error) {
         ctx.ui.setStatus("brainbud", statusIdle());
         ctx.ui.notify(`BrainBud: error — ${String(error)}`, "warning");
       }
+    }
+  });
+
+  pi.registerCommand("brainbud-last", {
+    description: "Re-show the last BrainBud tip",
+    handler: async (_args, ctx) => {
+      const entry = await getLastTip();
+      if (!entry) { ctx.ui.notify("BrainBud: no tips in history yet", "info"); return; }
+      notifier.showTip(pi, entry.tip);
+    }
+  });
+
+  pi.registerCommand("brainbud-history", {
+    description: "List the last 10 BrainBud tips",
+    handler: async (_args, ctx) => {
+      const entries = await getHistory(10);
+      if (entries.length === 0) { ctx.ui.notify("BrainBud: no tips in history yet", "info"); return; }
+      const lines = entries.map((e, i) => {
+        const date = new Date(e.savedAt).toLocaleDateString();
+        return `${i + 1}. [${date}] ${e.tip.title}`;
+      });
+      ctx.ui.notify(lines.join("\n"), "info");
     }
   });
 
