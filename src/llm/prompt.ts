@@ -1,6 +1,6 @@
 import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
 
-import type { BrainBudLlmRequest, TipContext } from "../types";
+import type { BrainBudLlmRequest, FeedbackSummary, TipContext } from "../types";
 
 interface SessionEntryLike {
   type?: string;
@@ -91,8 +91,32 @@ export const SYSTEM_PROMPT = [
   "- Dev using Go → goroutines are multiplexed onto OS threads by the Go scheduler (M:N threading); a blocking syscall parks the goroutine and unparks another",
 ].join("\n");
 
+function buildFeedbackSection(summary: FeedbackSummary): string {
+  const lines: string[] = ["\n=== User feedback ==="];
+
+  if (summary.likedExamples.length > 0) {
+    lines.push("Liked tips (aim for similar depth/style):");
+    for (const ex of summary.likedExamples) lines.push(`  + [${ex.category}] ${ex.title}`);
+  }
+
+  if (summary.dislikedExamples.length > 0) {
+    lines.push("Disliked tips (avoid similar topics/style):");
+    for (const ex of summary.dislikedExamples) lines.push(`  - [${ex.category}] ${ex.title}`);
+  }
+
+  if (summary.preferredCategories.length > 0) {
+    lines.push(`Preferred categories: ${summary.preferredCategories.join(", ")}`);
+  }
+
+  if (summary.avoidedCategories.length > 0) {
+    lines.push(`Avoid these categories: ${summary.avoidedCategories.join(", ")}`);
+  }
+
+  return lines.join("\n");
+}
+
 export function buildLlmTipPrompt(input: BrainBudLlmRequest): string {
-  const { context, recentTipTitles, conversationSnapshot } = input;
+  const { context, recentTipTitles, conversationSnapshot, feedbackSummary } = input;
 
   const parts: string[] = [];
 
@@ -112,6 +136,15 @@ export function buildLlmTipPrompt(input: BrainBudLlmRequest): string {
     `recent commands: ${context.recentCommands.join(" | ") || "none"}`,
     `tip titles to avoid: ${recentTipTitles.join(" | ") || "none"}`,
   ].join("\n"));
+
+  if (feedbackSummary) {
+    const hasAny =
+      feedbackSummary.likedExamples.length > 0 ||
+      feedbackSummary.dislikedExamples.length > 0 ||
+      feedbackSummary.preferredCategories.length > 0 ||
+      feedbackSummary.avoidedCategories.length > 0;
+    if (hasAny) parts.push(buildFeedbackSection(feedbackSummary));
+  }
 
   return parts.join("\n");
 }

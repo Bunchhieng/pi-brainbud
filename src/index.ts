@@ -7,7 +7,7 @@ import { isToolCallEventType } from "@mariozechner/pi-coding-agent";
 
 import { loadBrainBudConfig } from "./config/settings";
 import { detectProjectSignals } from "./context/projectDetector";
-import { appendTip, getHistory, getLastTip } from "./history/tipHistory";
+import { appendTip, getFeedbackSummary, getHistory, getLastTip, rateLastTip } from "./history/tipHistory";
 import { RuntimeTracker } from "./context/runtimeTracker";
 import { generateTipWithLlm } from "./llm/generator";
 import type { BrainBudCategory, BrainBudConfig, TriggerReason } from "./types";
@@ -89,9 +89,10 @@ export default function brainBud(pi: ExtensionAPI) {
     if (!bypassGate && !canShowTip()) return;
 
     const context = tracker.buildContext(ctx.cwd, projectCategories, reason);
+    const feedbackSummary = await getFeedbackSummary().catch(() => undefined);
 
     ctx.ui.setStatus("brainbud", "🧠 thinking...");
-    const tip = await generateTipWithLlm(ctx, context, recentTipTitles);
+    const tip = await generateTipWithLlm(ctx, context, recentTipTitles, feedbackSummary);
     ctx.ui.setStatus("brainbud", statusIdle());
 
     if (!tip) return;
@@ -131,9 +132,10 @@ export default function brainBud(pi: ExtensionAPI) {
     description: "Force a tip right now (bypasses frequency gate)",
     handler: async (_args, ctx) => {
       const context = tracker.buildContext(ctx.cwd, projectCategories, "idle");
+      const feedbackSummary = await getFeedbackSummary().catch(() => undefined);
       ctx.ui.setStatus("brainbud", "🧠 thinking...");
       try {
-        const tip = await generateTipWithLlm(ctx, context, recentTipTitles);
+        const tip = await generateTipWithLlm(ctx, context, recentTipTitles, feedbackSummary);
         ctx.ui.setStatus("brainbud", statusIdle());
         if (!tip) { ctx.ui.notify("BrainBud: model returned no tip", "info"); return; }
         notifier.showTip(pi, tip);
@@ -165,6 +167,26 @@ export default function brainBud(pi: ExtensionAPI) {
         return `${i + 1}. [${date}] ${e.tip.title}`;
       });
       ctx.ui.notify(lines.join("\n"), "info");
+    }
+  });
+
+  pi.registerCommand("brainbud-like", {
+    description: "Thumbs up the last BrainBud tip",
+    handler: async (_args, ctx) => {
+      const entry = await getLastTip();
+      if (!entry) { ctx.ui.notify("BrainBud: no tips in history yet", "info"); return; }
+      await rateLastTip("up");
+      ctx.ui.notify(`👍 Got it — more like "${entry.tip.title}"`, "info");
+    }
+  });
+
+  pi.registerCommand("brainbud-dislike", {
+    description: "Thumbs down the last BrainBud tip",
+    handler: async (_args, ctx) => {
+      const entry = await getLastTip();
+      if (!entry) { ctx.ui.notify("BrainBud: no tips in history yet", "info"); return; }
+      await rateLastTip("down");
+      ctx.ui.notify(`👎 Noted — fewer tips like "${entry.tip.title}"`, "info");
     }
   });
 

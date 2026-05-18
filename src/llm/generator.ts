@@ -4,12 +4,13 @@ import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { buildConversationSnapshot, buildLlmTipPrompt, SYSTEM_PROMPT } from "./prompt";
 import { parseLlmTipResponse } from "./parser";
 import { validateTipCode } from "./validator";
-import type { BrainBudTipSuggestion, TipContext } from "../types";
+import type { BrainBudTipSuggestion, FeedbackSummary, TipContext } from "../types";
 
 export async function generateTipWithLlm(
   ctx: ExtensionContext,
   context: TipContext,
-  recentTipTitles: string[]
+  recentTipTitles: string[],
+  feedbackSummary?: FeedbackSummary
 ): Promise<BrainBudTipSuggestion | undefined> {
   if (!ctx.model) return undefined;
 
@@ -30,7 +31,8 @@ export async function generateTipWithLlm(
               text: buildLlmTipPrompt({
                 context,
                 recentTipTitles,
-                conversationSnapshot: buildConversationSnapshot(ctx)
+                conversationSnapshot: buildConversationSnapshot(ctx),
+                ...(feedbackSummary ? { feedbackSummary } : {})
               })
             }
           ]

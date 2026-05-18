@@ -36,8 +36,16 @@ export interface BrainBudTipSuggestion {
   learnMoreUrl?: string;
 }
 
+export interface FeedbackSummary {
+  likedExamples: Array<{ title: string; category: string }>;
+  dislikedExamples: Array<{ title: string; category: string }>;
+  preferredCategories: string[];
+  avoidedCategories: string[];
+}
+
 export interface BrainBudLlmRequest {
   context: TipContext;
   recentTipTitles: string[];
   conversationSnapshot: string;
+  feedbackSummary?: FeedbackSummary;
 }
