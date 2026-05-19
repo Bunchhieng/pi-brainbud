@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>brainbud — CS tips in your flow</title>
+  <meta name="description" content="A Pi coding agent extension that teaches CS concepts while you code. Context-aware. Adaptive. Never intrusive.">
+  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;700;900&family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;1,400&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:      #070709;
+      --surf:    #0D0D12;
+      --surf2:   #131318;
+      --border:  #1D1D26;
+      --amber:   #FF9500;
+      --ag:      rgba(255,149,0,0.1);
+      --text:    #EAEAF0;
+      --muted:   #68687A;
+      --dim:     #33333F;
+      --mono:    'JetBrains Mono', ui-monospace, monospace;
+      --disp:    'Unbounded', sans-serif;
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 14px;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* scanline grain */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg, transparent, transparent 2px,
+        rgba(0,0,0,0.022) 2px, rgba(0,0,0,0.022) 4px
+      );
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    /* ── NEURAL CANVAS ── */
+    #neural {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+    }
+
+    nav, main, footer { position: relative; z-index: 1; }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 200;
+      height: 58px;
+      padding: 0 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      background: rgba(7,7,9,0.82);
+      backdrop-filter: blur(20px);
+    }
+
+    .logo {
+      font-family: var(--disp);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      color: var(--text);
+    }
+    .logo em { color: var(--amber); font-style: normal; }
+
+    .nav-right { display: flex; align-items: center; gap: 28px; }
+    .nav-right a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      transition: color .2s;
+    }
+    .nav-right a:hover { color: var(--text); }
+
+    .nav-gh {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 6px 14px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      transition: border-color .2s, color .2s !important;
+    }
+    .nav-gh:hover { border-color: var(--amber) !important; color: var(--amber) !important; }
+
+    /* ── HERO ── */
+    .hero {
+      min-height: 100dvh;
+      padding: 58px 56px 0;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      align-items: center;
+      gap: 48px;
+    }
+
+    .hero-left { padding-top: 16px; }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--amber);
+      margin-bottom: 30px;
+      opacity: 0;
+      animation: fade-up .5s .1s forwards;
+    }
+    .eyebrow-dot {
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: var(--amber);
+      flex-shrink: 0;
+    }
+
+    .hero-h1 {
+      font-family: var(--disp);
+      font-weight: 900;
+      font-size: clamp(60px, 8.5vw, 118px);
+      line-height: 0.9;
+      letter-spacing: -0.025em;
+      margin-bottom: 30px;
+      opacity: 0;
+      animation: fade-up .6s .25s forwards;
+    }
+
+    .h1-solid  { display: block; color: var(--text); }
+    .h1-hollow {
+      display: block;
+      color: transparent;
+      -webkit-text-stroke: 2.5px var(--amber);
+    }
+
+    .hero-tag {
+      font-size: 13px;
+      color: var(--muted);
+      font-style: italic;
+      line-height: 1.65;
+      margin-bottom: 44px;
+      max-width: 360px;
+      opacity: 0;
+      animation: fade-up .6s .4s forwards;
+    }
+
+    .install {
+      display: inline-flex;
+      align-items: stretch;
+      background: var(--surf);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      opacity: 0;
+      animation: fade-up .6s .55s forwards;
+      transition: border-color .2s;
+    }
+    .install:hover { border-color: var(--dim); }
+
+    .i-prompt {
+      padding: 12px 14px;
+      color: var(--amber);
+      border-right: 1px solid var(--border);
+      font-size: 13px;
+      user-select: none;
+    }
+    .i-cmd {
+      padding: 12px 18px;
+      color: var(--text);
+      font-size: 12.5px;
+      letter-spacing: 0.02em;
+    }
+    .i-copy {
+      padding: 12px 14px;
+      cursor: pointer;
+      color: var(--dim);
+      border: none;
+      background: none;
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      border-left: 1px solid var(--border);
+      transition: color .2s, background .2s;
+    }
+    .i-copy:hover { color: var(--amber); background: var(--ag); }
+
+    /* ── HERO RIGHT: ORBITAL ORB ── */
+    .hero-right {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      animation: fade-in .9s .35s forwards;
+    }
+
+    .orb {
+      position: relative;
+      width: 340px;
+      height: 340px;
+    }
+
+    .orb-glow {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 180px; height: 180px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(255,149,0,0.18) 0%, transparent 70%);
+      filter: blur(24px);
+    }
+
+    .ring {
+      position: absolute;
+      top: 50%; left: 50%;
+      border-radius: 50%;
+      border: 1px solid var(--amber);
+      transform: translate(-50%, -50%);
+    }
+    .r1 { width: 180px; height: 180px; opacity: .16; animation: spin 18s linear infinite; }
+    .r2 { width: 240px; height: 240px; opacity: .08; animation: spin 30s linear infinite reverse; }
+    .r3 { width: 300px; height: 300px; opacity: .045; animation: spin 48s linear infinite; border-style: dashed; }
+    .r4 { width: 370px; height: 370px; opacity: .025; animation: spin 65s linear infinite reverse; }
+
+    @keyframes spin {
+      from { transform: translate(-50%, -50%) rotate(0deg); }
+      to   { transform: translate(-50%, -50%) rotate(360deg); }
+    }
+
+    .orb-brain {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 90px;
+      z-index: 4;
+      filter: drop-shadow(0 0 36px rgba(255,149,0,0.5));
+      animation: float 5s ease-in-out infinite;
+    }
+
+    @keyframes float {
+      0%,100% { transform: translate(-50%, -50%) translateY(0); }
+      50%      { transform: translate(-50%, -50%) translateY(-10px); }
+    }
+
+    /* ── MARQUEE ── */
+    .marquee-wrap {
+      overflow: hidden;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      background: var(--surf);
+      padding: 13px 0;
+      position: relative;
+    }
+
+    /* fade edges */
+    .marquee-wrap::before,
+    .marquee-wrap::after {
+      content: '';
+      position: absolute;
+      top: 0; bottom: 0;
+      width: 100px;
+      z-index: 2;
+    }
+    .marquee-wrap::before { left: 0;  background: linear-gradient(to right, var(--surf), transparent); }
+    .marquee-wrap::after  { right: 0; background: linear-gradient(to left,  var(--surf), transparent); }
+
+    .marquee-track {
+      display: flex;
+      width: max-content;
+      animation: scroll-left 38s linear infinite;
+    }
+    @keyframes scroll-left {
+      from { transform: translateX(0); }
+      to   { transform: translateX(-50%); }
+    }
+
+    .mq-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 0 22px;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .mq-sep { color: var(--dim); }
+
+    /* ── SHARED ── */
+    .sec  { padding: 96px 56px; }
+    .wrap { max-width: 1080px; margin: 0 auto; }
+
+    .s-eye {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: var(--amber);
+      margin-bottom: 14px;
+    }
+    .s-title {
+      font-family: var(--disp);
+      font-size: clamp(30px, 4vw, 46px);
+      font-weight: 700;
+      letter-spacing: -0.025em;
+      line-height: 1.05;
+      color: var(--text);
+      margin-bottom: 14px;
+    }
+    .s-sub {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.8;
+      max-width: 420px;
+    }
+
+    hr.rule { border: none; border-top: 1px solid var(--border); }
+
+    /* ── DEMO ── */
+    .demo-grid {
+      display: grid;
+      grid-template-columns: 1fr 1.25fr;
+      gap: 80px;
+      align-items: center;
+    }
+    .demo-note {
+      margin-top: 18px;
+      font-size: 12px;
+      color: var(--dim);
+      font-style: italic;
+    }
+
+    .terminal {
+      background: var(--surf);
+      border: 1px solid rgba(255,149,0,0.22);
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow:
+        0 0 0 1px rgba(255,149,0,0.07),
+        0 0 80px rgba(255,149,0,0.07),
+        0 40px 90px rgba(0,0,0,0.75);
+    }
+
+    .t-bar {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 11px 16px;
+      background: var(--surf2);
+      border-bottom: 1px solid var(--border);
+    }
+    .tdot { width: 11px; height: 11px; border-radius: 50%; }
+    .tdot:nth-child(1) { background: #FF5F57; }
+    .tdot:nth-child(2) { background: #FEBC2E; }
+    .tdot:nth-child(3) { background: #28C840; }
+    .t-title { margin: 0 auto; font-size: 11px; color: var(--dim); letter-spacing: 0.04em; }
+
+    .t-body { padding: 20px 22px; min-height: 320px; font-size: 12.5px; line-height: 1.75; }
+
+    .tl { display: block; }
+    .tc-prompt { color: var(--muted); }
+    .tc-gutter  { color: var(--amber); }
+    .tc-title   { color: var(--amber); font-weight: 500; }
+    .tc-text    { color: #C5C5D3; }
+    .tc-code    { color: #7DD3FC; }
+    .tc-url     { color: #A78BFA; }
+
+    .cursor {
+      display: inline-block;
+      width: 7px; height: 13px;
+      background: var(--amber);
+      vertical-align: text-bottom;
+      margin-left: 1px;
+      animation: blink 1s step-end infinite;
+    }
+    @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0; } }
+
+    /* ── FEATURES ── */
+    .feats {
+      margin-top: 52px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .feat {
+      background: var(--bg);
+      padding: 40px 34px 36px;
+      position: relative;
+      overflow: hidden;
+      transition: background .22s;
+    }
+    .feat:hover { background: var(--surf); }
+
+    .feat-num {
+      font-family: var(--disp);
+      font-weight: 900;
+      font-size: 88px;
+      line-height: 1;
+      color: var(--border);
+      position: absolute;
+      top: 8px; right: 16px;
+      transition: color .22s;
+      user-select: none;
+      letter-spacing: -0.03em;
+    }
+    .feat:hover .feat-num { color: var(--dim); }
+
+    .feat-eye {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--amber);
+      margin-bottom: 14px;
+    }
+    .feat-title {
+      font-family: var(--disp);
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 11px;
+      letter-spacing: -0.01em;
+    }
+    .feat-desc {
+      font-size: 12.5px;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    /* ── COMMANDS ── */
+    .cmds { margin-top: 50px; }
+
+    .cmd-row {
+      display: grid;
+      grid-template-columns: 210px 1fr;
+      align-items: baseline;
+      gap: 20px;
+      padding: 19px 10px;
+      margin: 0 -10px;
+      border-bottom: 1px solid var(--border);
+      border-radius: 5px;
+      transition: background .18s;
+    }
+    .cmd-row:first-child { border-top: 1px solid var(--border); }
+    .cmd-row:hover { background: var(--surf); }
+
+    .cmd-name {
+      font-size: 12.5px;
+      color: var(--amber);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .cmd-gt { color: var(--dim); }
+
+    .cmd-desc { font-size: 12.5px; color: var(--muted); line-height: 1.55; }
+
+    /* ── STACK TAGS ── */
+    .tags-sec {
+      padding: 52px 56px;
+      border-top: 1px solid var(--border);
+    }
+    .tags-row {
+      max-width: 1080px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 28px;
+    }
+    .tags-lbl {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.13em;
+      color: var(--dim);
+      white-space: nowrap;
+    }
+    .tags { display: flex; flex-wrap: wrap; gap: 8px; }
+    .tag {
+      padding: 5px 12px;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      font-size: 11.5px;
+      color: var(--muted);
+      cursor: default;
+      transition: border-color .18s, color .18s;
+    }
+    .tag:hover { border-color: var(--amber); color: var(--amber); }
+
+    /* ── FOOTER ── */
+    footer {
+      padding: 30px 56px;
+      border-top: 1px solid var(--border);
+    }
+    .foot {
+      max-width: 1080px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .foot-l { font-size: 12px; color: var(--muted); }
+    .foot-l strong { color: var(--amber); font-weight: 400; }
+    .foot-r a {
+      font-size: 12px;
+      color: var(--muted);
+      text-decoration: none;
+      transition: color .18s;
+    }
+    .foot-r a:hover { color: var(--amber); }
+
+    /* ── ANIMATIONS ── */
+    @keyframes fade-up {
+      from { opacity: 0; transform: translateY(14px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fade-in {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 860px) {
+      nav { padding: 0 24px; }
+      .nav-right a:not(.nav-gh) { display: none; }
+      .hero { grid-template-columns: 1fr; padding: 80px 24px 60px; }
+      .hero-right { display: none; }
+      .sec { padding: 72px 24px; }
+      .tags-sec { padding: 44px 24px; }
+      footer { padding: 28px 24px; }
+      .demo-grid { grid-template-columns: 1fr; gap: 48px; }
+      .feats { grid-template-columns: 1fr; }
+      .cmd-row { grid-template-columns: 1fr; gap: 5px; }
+      .tags-row { flex-direction: column; align-items: flex-start; gap: 14px; }
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="neural"></canvas>
+
+<!-- NAV -->
+<nav>
+  <div class="logo">brain<em>bud</em></div>
+  <div class="nav-right">
+    <a href="#demo">demo</a>
+    <a href="#features">features</a>
+    <a href="#commands">commands</a>
+    <a href="https://github.com/Bunchhieng/pi-brainbud" class="nav-gh" target="_blank" rel="noopener">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
+        <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+      </svg>
+      GitHub
+    </a>
+  </div>
+</nav>
+
+<main>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-left">
+    <div class="eyebrow">
+      <span class="eyebrow-dot"></span>
+      a pi coding agent extension
+    </div>
+    <h1 class="hero-h1">
+      <span class="h1-solid">brain</span>
+      <span class="h1-hollow">bud</span>
+    </h1>
+    <p class="hero-tag">"A dose of brainbud a day,<br>keeps the brain rot away."</p>
+    <div class="install">
+      <span class="i-prompt">$</span>
+      <span class="i-cmd">pi install https://github.com/Bunchhieng/pi-brainbud</span>
+      <button class="i-copy" onclick="copyCmd(this)">copy</button>
+    </div>
+  </div>
+  <div class="hero-right" aria-hidden="true">
+    <div class="orb">
+      <div class="orb-glow"></div>
+      <div class="ring r1"></div>
+      <div class="ring r2"></div>
+      <div class="ring r3"></div>
+      <div class="ring r4"></div>
+      <div class="orb-brain">🧠</div>
+    </div>
+  </div>
+</section>
+
+<!-- MARQUEE -->
+<div class="marquee-wrap" aria-hidden="true">
+  <div class="marquee-track">
+    <span class="mq-item">bit tricks <span class="mq-sep">//</span></span>
+    <span class="mq-item">language internals <span class="mq-sep">//</span></span>
+    <span class="mq-item">algorithm insights <span class="mq-sep">//</span></span>
+    <span class="mq-item">memory models <span class="mq-sep">//</span></span>
+    <span class="mq-item">hash collisions <span class="mq-sep">//</span></span>
+    <span class="mq-item">borrow checker <span class="mq-sep">//</span></span>
+    <span class="mq-item">event loop <span class="mq-sep">//</span></span>
+    <span class="mq-item">amortized O(1) <span class="mq-sep">//</span></span>
+    <span class="mq-item">float precision <span class="mq-sep">//</span></span>
+    <span class="mq-item">xor swap <span class="mq-sep">//</span></span>
+    <span class="mq-item">integer overflow <span class="mq-sep">//</span></span>
+    <span class="mq-item">merge sort stability <span class="mq-sep">//</span></span>
+    <!-- duplicate for seamless loop -->
+    <span class="mq-item">bit tricks <span class="mq-sep">//</span></span>
+    <span class="mq-item">language internals <span class="mq-sep">//</span></span>
+    <span class="mq-item">algorithm insights <span class="mq-sep">//</span></span>
+    <span class="mq-item">memory models <span class="mq-sep">//</span></span>
+    <span class="mq-item">hash collisions <span class="mq-sep">//</span></span>
+    <span class="mq-item">borrow checker <span class="mq-sep">//</span></span>
+    <span class="mq-item">event loop <span class="mq-sep">//</span></span>
+    <span class="mq-item">amortized O(1) <span class="mq-sep">//</span></span>
+    <span class="mq-item">float precision <span class="mq-sep">//</span></span>
+    <span class="mq-item">xor swap <span class="mq-sep">//</span></span>
+    <span class="mq-item">integer overflow <span class="mq-sep">//</span></span>
+    <span class="mq-item">merge sort stability <span class="mq-sep">//</span></span>
+  </div>
+</div>
+
+<!-- DEMO -->
+<section class="sec" id="demo">
+  <div class="wrap">
+    <div class="demo-grid">
+      <div>
+        <div class="s-eye">// see it in action</div>
+        <h2 class="s-title">Tips appear<br>where you work.</h2>
+        <p class="s-sub">brainbud watches your active files, imports, and recent commands. After each agent prompt, it surfaces a CS insight as an amber left-gutter block — between prompts, never during.</p>
+        <p class="demo-note">Never suggests fixes. Only teaches the <em style="color:var(--muted)">why</em>.</p>
+      </div>
+      <div class="terminal" id="terminal">
+        <div class="t-bar">
+          <div class="tdot"></div>
+          <div class="tdot"></div>
+          <div class="tdot"></div>
+          <span class="t-title">pi — ~/projects/myapp</span>
+        </div>
+        <div class="t-body" id="t-body"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="rule">
+
+<!-- FEATURES -->
+<section class="sec" id="features">
+  <div class="wrap">
+    <div class="s-eye">// why brainbud</div>
+    <h2 class="s-title">Built for deep work.</h2>
+    <div class="feats">
+      <div class="feat">
+        <div class="feat-num">01</div>
+        <div class="feat-eye">awareness</div>
+        <div class="feat-title">Context-aware</div>
+        <p class="feat-desc">Reads your active file, imports, and recent commands. Every tip is specific to the stack you're actually using right now.</p>
+      </div>
+      <div class="feat">
+        <div class="feat-num">02</div>
+        <div class="feat-eye">learning</div>
+        <div class="feat-title">Adaptive</div>
+        <p class="feat-desc">Rate tips up or down. Liked topics resurface. Disliked ones vanish. The model steadily maps your knowledge gaps.</p>
+      </div>
+      <div class="feat">
+        <div class="feat-num">03</div>
+        <div class="feat-eye">focus</div>
+        <div class="feat-title">Non-intrusive</div>
+        <p class="feat-desc">Fires after a configurable idle window. Tips appear between prompts — zero interruptions mid-thought.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="rule">
+
+<!-- COMMANDS -->
+<section class="sec" id="commands">
+  <div class="wrap">
+    <div class="s-eye">// commands</div>
+    <h2 class="s-title">Simple controls.</h2>
+    <div class="cmds">
+      <div class="cmd-row">
+        <div class="cmd-name"><span class="cmd-gt">&gt;</span> brainbud-tip</div>
+        <div class="cmd-desc">Force a tip immediately, without waiting for the idle trigger.</div>
+      </div>
+      <div class="cmd-row">
+        <div class="cmd-name"><span class="cmd-gt">&gt;</span> brainbud-like</div>
+        <div class="cmd-desc">Rate the last tip up — steers future tips toward this topic.</div>
+      </div>
+      <div class="cmd-row">
+        <div class="cmd-name"><span class="cmd-gt">&gt;</span> brainbud-dislike</div>
+        <div class="cmd-desc">Rate the last tip down — suppresses similar tips going forward.</div>
+      </div>
+      <div class="cmd-row">
+        <div class="cmd-name"><span class="cmd-gt">&gt;</span> brainbud-last</div>
+        <div class="cmd-desc">Re-display the most recent tip in case you missed it.</div>
+      </div>
+      <div class="cmd-row">
+        <div class="cmd-name"><span class="cmd-gt">&gt;</span> brainbud-history</div>
+        <div class="cmd-desc">List the last 10 tips with their titles and timestamps.</div>
+      </div>
+      <div class="cmd-row">
+        <div class="cmd-name"><span class="cmd-gt">&gt;</span> brainbud-status</div>
+        <div class="cmd-desc">Debug snapshot — active context, config values, current model.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- STACK TAGS -->
+<div class="tags-sec">
+  <div class="tags-row">
+    <span class="tags-lbl">Detects</span>
+    <div class="tags">
+      <span class="tag">Python</span>
+      <span class="tag">Django</span>
+      <span class="tag">TypeScript</span>
+      <span class="tag">React</span>
+      <span class="tag">Rust</span>
+      <span class="tag">Go</span>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<footer>
+  <div class="foot">
+    <div class="foot-l">🧠 brain<strong>bud</strong> — a Pi coding agent extension</div>
+    <div class="foot-r">
+      <a href="https://github.com/Bunchhieng/pi-brainbud" target="_blank" rel="noopener">
+        github.com/Bunchhieng/pi-brainbud
+      </a>
+    </div>
+  </div>
+</footer>
+
+<script>
+/* ── COPY ── */
+function copyCmd(btn) {
+  navigator.clipboard.writeText('pi install https://github.com/Bunchhieng/pi-brainbud');
+  btn.textContent = 'copied!';
+  setTimeout(() => btn.textContent = 'copy', 2000);
+}
+
+/* ── NEURAL CANVAS ── */
+(function () {
+  const canvas = document.getElementById('neural');
+  const ctx = canvas.getContext('2d');
+  const AMBER = [255, 149, 0];
+  const N = 72, DIST = 130;
+  let W, H, nodes;
+
+  function resize() {
+    W = canvas.width  = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+
+  function mkNode() {
+    return {
+      x: Math.random() * W,
+      y: Math.random() * H,
+      vx: (Math.random() - .5) * .35,
+      vy: (Math.random() - .5) * .35,
+      r: Math.random() * 1.4 + .8,
+      a: Math.random() * .35 + .12,
+      pulse: 0,
+    };
+  }
+
+  function init() { nodes = Array.from({ length: N }, mkNode); }
+
+  setInterval(() => {
+    if (nodes) nodes[Math.floor(Math.random() * nodes.length)].pulse = 1;
+  }, 1600);
+
+  function frame() {
+    ctx.clearRect(0, 0, W, H);
+
+    nodes.forEach(n => {
+      n.x += n.vx;
+      n.y += n.vy;
+      if (n.x < 0 || n.x > W) n.vx *= -1;
+      if (n.y < 0 || n.y > H) n.vy *= -1;
+      n.pulse = Math.max(0, n.pulse - .018);
+    });
+
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i + 1; j < nodes.length; j++) {
+        const a = nodes[i], b = nodes[j];
+        const dx = a.x - b.x, dy = a.y - b.y;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        if (d < DIST) {
+          const t = 1 - d / DIST;
+          const p = Math.max(a.pulse, b.pulse);
+          const alpha = t * .07 + p * .22;
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.strokeStyle = `rgba(${AMBER},${alpha})`;
+          ctx.lineWidth = t * .9;
+          ctx.stroke();
+        }
+      }
+    }
+
+    nodes.forEach(n => {
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, n.r + n.pulse * 2.5, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(${AMBER},${n.a + n.pulse * .35})`;
+      ctx.fill();
+    });
+
+    requestAnimationFrame(frame);
+  }
+
+  window.addEventListener('resize', () => { resize(); init(); });
+  resize();
+  init();
+  frame();
+})();
+
+/* ── TERMINAL TYPEWRITER ── */
+const LINES = [
+  { cls: 'tc-prompt', text: '> analysing auth/session.ts…' },
+  { cls: '',          text: '' },
+  { cls: 'tc-gutter', text: '┃ 🧠  brainbud' },
+  { cls: 'tc-gutter', text: '┃' },
+  { cls: 'tc-title',  text: '┃ Bit Trick: XOR Swap' },
+  { cls: 'tc-gutter', text: '┃' },
+  { cls: 'tc-text',   text: '┃ x ^= y; y ^= x; x ^= y swaps two integers' },
+  { cls: 'tc-text',   text: '┃ without a temp. XOR is its own inverse —' },
+  { cls: 'tc-text',   text: '┃ applying it twice cancels out, so the' },
+  { cls: 'tc-text',   text: '┃ third XOR restores the original value.' },
+  { cls: 'tc-gutter', text: '┃' },
+  { cls: 'tc-code',   text: '┃ a ^= b; b ^= a; a ^= b' },
+  { cls: 'tc-gutter', text: '┃' },
+  { cls: 'tc-url',    text: "┃ → Hacker's Delight §2-2" },
+];
+
+const tbody = document.getElementById('t-body');
+let li = 0, ci = 0, curEl = null;
+
+function tick() {
+  if (li >= LINES.length) {
+    const c = document.createElement('span');
+    c.className = 'cursor';
+    tbody.appendChild(c);
+    return;
+  }
+  const row = LINES[li];
+  if (!curEl) {
+    const span = document.createElement('span');
+    span.className = 'tl ' + row.cls;
+    if (row.text === '') {
+      span.innerHTML = '&nbsp;';
+      tbody.appendChild(span);
+      li++; ci = 0;
+      setTimeout(tick, 80);
+      return;
+    }
+    tbody.appendChild(span);
+    curEl = span;
+  }
+  if (ci < row.text.length) {
+    curEl.textContent += row.text[ci++];
+    const delay = row.cls === 'tc-prompt' ? 52 : row.cls === 'tc-code' ? 26 : 17;
+    setTimeout(tick, delay);
+  } else {
+    li++; ci = 0; curEl = null;
+    setTimeout(tick, li === 2 ? 380 : 20);
+  }
+}
+
+new IntersectionObserver((entries, obs) => {
+  if (entries[0].isIntersecting) {
+    setTimeout(tick, 500);
+    obs.disconnect();
+  }
+}, { threshold: 0.3 }).observe(document.getElementById('terminal'));
+</script>
+
+</body>
+</html>
